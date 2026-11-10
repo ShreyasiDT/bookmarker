@@ -6,5 +6,7 @@ export default defineSchema({
     url: v.string(),
     savedAt: v.number(),
     userId: v.string(),
+    title: v.optional(v.string()),
+    thumbnail: v.optional(v.string()),
   }).index("by_user", ["userId", "savedAt"]),
 });

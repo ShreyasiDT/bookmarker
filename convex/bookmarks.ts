@@ -1,4 +1,4 @@
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 
 export const save = mutation({
@@ -26,5 +26,24 @@ export const list = query({
       .withIndex("by_user", (q) => q.eq("userId", identity.subject))
       .order("desc")
       .collect();
+  },
+});
+
+export const insert = internalMutation({
+  args: {
+    url: v.string(),
+    userId: v.string(),
+    title: v.optional(v.string()),
+    thumbnail: v.optional(v.string()),
+  },
+
+  handler: async (ctx, args) => {
+    await ctx.db.insert("bookmarks", {
+      url: args.url,
+      userId: args.userId,
+      title: args.title,
+      thumbnail: args.thumbnail,
+      savedAt: Date.now(),
+    });
   },
 });
