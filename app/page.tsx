@@ -42,7 +42,7 @@ export default function Home() {
   }
 
   return (
-    <main className="p-8 max-w-xl mx-auto">
+    <main className="p-8 w-full max-w-xl mx-auto">
       <Unauthenticated>
         <p>Sign in to save bookmarks.</p>
       </Unauthenticated>
