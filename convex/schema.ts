@@ -5,5 +5,6 @@ export default defineSchema({
   bookmarks: defineTable({
     url: v.string(),
     savedAt: v.number(),
-  }),
+    userId: v.string(),
+  }).index("by_user", ["userId", "savedAt"]),
 });
