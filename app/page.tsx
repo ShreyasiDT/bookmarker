@@ -4,9 +4,10 @@ import { api } from "@/convex/_generated/api";
 import {
   Authenticated,
   Unauthenticated,
-  useAction,
+  useMutation,
   useQuery,
 } from "convex/react";
+import { ConvexError } from "convex/values";
 function getDomain(url: string) {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
@@ -27,15 +28,21 @@ function getFallbackTitle(url: string) {
 export default function Home() {
   const [url, setUrl] = useState("");
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const bookmarks = useQuery(api.bookmarks.list);
-  const saveWithPreview = useAction(api.preview.saveWithPreview);
+  const save = useMutation(api.bookmarks.save);
 
   async function handleSave() {
     if (!url.trim() || saving) return;
     setSaving(true);
+    setError(null);
     try {
-      await saveWithPreview({ url });
+      await save({ url });
       setUrl("");
+    } catch (err) {
+      setError(
+        err instanceof ConvexError ? String(err.data) : "Something went wrong",
+      );
     } finally {
       setSaving(false);
     }
@@ -50,7 +57,10 @@ export default function Home() {
         <div className="flex gap-2">
           <input
             value={url}
-            onChange={(e) => setUrl(e.target.value)}
+            onChange={(e) => {
+              setUrl(e.target.value);
+              setError(null);
+            }}
             placeholder="Paste the url you need to save today!"
             className="flex-1 border rounded px-3 py-2"
           />
@@ -62,10 +72,17 @@ export default function Home() {
             {saving ? "Saving..." : "Save"}
           </button>
         </div>
+        {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
         <div className="mt-6 space-y-2">
           {bookmarks === undefined && <p>Loading...</p>}
           {bookmarks?.map((b) => (
-            <div key={b._id} className="flex gap-3 border rounded p-3">
+            <a
+              key={b._id}
+              className={`flex gap-3 border rounded p-3 hover:bg-neutral-900 ${b.status === "pending" ? "opacity-60" : ""} `}
+              target="_blacnk"
+              href={b.url}
+              rel="noopener noreferrer"
+            >
               {b.thumbnail ? (
                 <img
                   src={b.thumbnail}
@@ -86,8 +103,14 @@ export default function Home() {
                   {b.title ?? getFallbackTitle(b.url)}
                 </p>
                 <p className="text-sm opacity-60">{getDomain(b.url)}</p>
+                {b.status === "failed" && (
+                  <p className="mt-1 inline-flex items-center gap-1 rounded bg-amber-500/10 px-1.5 py-0.5 text-xs text-amber-400">
+                    <span aria-hidden="true">⚠</span>
+                    Saved — couldn&apos;t load a preview
+                  </p>
+                )}
               </div>
-            </div>
+            </a>
           ))}
         </div>
       </Authenticated>

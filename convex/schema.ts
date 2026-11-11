@@ -8,5 +8,10 @@ export default defineSchema({
     userId: v.string(),
     title: v.optional(v.string()),
     thumbnail: v.optional(v.string()),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("ready"),
+      v.literal("failed"),
+    ),
   }).index("by_user", ["userId", "savedAt"]),
 });

@@ -1,6 +1,6 @@
 import { mutation, query, internalMutation } from "./_generated/server";
-import { v } from "convex/values";
-
+import { internal } from "./_generated/api";
+import { ConvexError, v } from "convex/values";
 export const save = mutation({
   args: {
     url: v.string(),
@@ -8,11 +8,32 @@ export const save = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not signed in");
-    await ctx.db.insert("bookmarks", {
-      url: args.url,
+    const url = args.url.trim();
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      throw new ConvexError("That doesn't look like a link!");
+    }
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      throw new ConvexError("Only http and https links can be saved");
+    }
+    const bookmarkId = await ctx.db.insert("bookmarks", {
+      url,
       savedAt: Date.now(),
       userId: identity.subject,
+      status: "pending",
     });
+    await ctx.scheduler.runAfter(0, internal.preview.fetchPreview, {
+      bookmarkId,
+      url,
+    });
+    // await ctx.db.insert("bookmarks", {
+    //   url: args.url,
+    //   savedAt: Date.now(),
+    //   userId: identity.subject,
+    //   status: "pending",
+    // });
   },
 });
 
@@ -29,21 +50,18 @@ export const list = query({
   },
 });
 
-export const insert = internalMutation({
+export const updatePreview = internalMutation({
   args: {
-    url: v.string(),
-    userId: v.string(),
+    bookmarkId: v.id("bookmarks"),
     title: v.optional(v.string()),
     thumbnail: v.optional(v.string()),
+    status: v.union(v.literal("ready"), v.literal("failed")),
   },
-
   handler: async (ctx, args) => {
-    await ctx.db.insert("bookmarks", {
-      url: args.url,
-      userId: args.userId,
+    await ctx.db.patch(args.bookmarkId, {
       title: args.title,
       thumbnail: args.thumbnail,
-      savedAt: Date.now(),
+      status: args.status,
     });
   },
 });
