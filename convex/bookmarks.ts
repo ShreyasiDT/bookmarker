@@ -28,12 +28,6 @@ export const save = mutation({
       bookmarkId,
       url,
     });
-    // await ctx.db.insert("bookmarks", {
-    //   url: args.url,
-    //   savedAt: Date.now(),
-    //   userId: identity.subject,
-    //   status: "pending",
-    // });
   },
 });
 
@@ -63,5 +57,25 @@ export const updatePreview = internalMutation({
       thumbnail: args.thumbnail,
       status: args.status,
     });
+  },
+});
+
+export const setNote = mutation({
+  args: {
+    bookmarkId: v.id("bookmarks"),
+    note: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not signed in");
+    const bookmark = await ctx.db.get(args.bookmarkId);
+    if (!bookmark || bookmark.userId !== identity.subject) {
+      throw new Error("Bookmark not found");
+    }
+    const note = args.note.trim();
+    if (note.length > 500) {
+      throw new ConvexError("Keep notes under 500 characters");
+    }
+    await ctx.db.patch(args.bookmarkId, { userNote: note || undefined });
   },
 });

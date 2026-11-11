@@ -13,5 +13,6 @@ export default defineSchema({
       v.literal("ready"),
       v.literal("failed"),
     ),
+    userNote: v.optional(v.string()),
   }).index("by_user", ["userId", "savedAt"]),
 });
