@@ -79,6 +79,26 @@ function BookmarkCard({ b }: { b: Doc<"bookmarks"> }) {
           {heading}
         </a>
         <p className="text-sm opacity-60">{getDomain(b.url)}</p>
+        {b.summary && (
+          <p className="mt-1 text-sm opacity-80 line-clamp-2">{b.summary}</p>
+        )}
+        {b.aiTags && b.aiTags.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {b.aiTags.slice(0, 5).map((tag) => (
+              <span
+                key={tag}
+                className="rounded bg-neutral-800 px-1.5 py-0.5 text-xs opacity-80"
+              >
+                {tag}
+              </span>
+            ))}
+            {b.aiTags.length > 5 && (
+              <span className="px-1 py-0.5 text-xs opacity-60">
+                +{b.aiTags.length - 5}
+              </span>
+            )}
+          </div>
+        )}
         {b.status === "failed" && !editing && (
           <p className="mt-1 rounded bg-amber-500/10 px-2 py-1 text-xs text-amber-400">
             <span aria-hidden="true">⚠ </span>
