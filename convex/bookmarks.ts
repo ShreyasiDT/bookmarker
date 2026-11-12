@@ -107,7 +107,11 @@ export const getForEnrich = internalQuery({
       .take(200);
 
     const existingTags = [
-      ...new Set(recent.flatMap((b) => b.aiTags ?? [])),
+      ...new Set(
+        recent
+          .filter((b) => b._id !== bookmark._id)
+          .flatMap((b) => b.aiTags ?? []),
+      ),
     ].slice(0, 100);
     return { bookmark, existingTags };
   },

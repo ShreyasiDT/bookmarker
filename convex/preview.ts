@@ -109,9 +109,11 @@ async function fetchOwn(url: string): Promise<Preview | null> {
     }
     const $ = cheerio.load(await res.text());
     const title =
-      $('meta[property="og:title"]').attr("content") ||
-      $("title").text() ||
-      undefined;
+      (
+        $('meta[property="og:title"]').attr("content") ||
+        $("title").text() ||
+        ""
+      ).trim() || undefined;
 
     const description =
       $('meta[property="og:description"]').attr("content") ||
