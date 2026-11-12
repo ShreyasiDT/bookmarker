@@ -99,6 +99,9 @@ function BookmarkCard({ b }: { b: Doc<"bookmarks"> }) {
             )}
           </div>
         )}
+        {b.status === "ready" && !b.summary && (
+          <p className="mt-1 text-xs opacity-50">Adding tags…</p>
+        )}
         {b.status === "failed" && !editing && (
           <p className="mt-1 rounded bg-amber-500/10 px-2 py-1 text-xs text-amber-400">
             <span aria-hidden="true">⚠ </span>
