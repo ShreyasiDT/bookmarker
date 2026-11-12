@@ -1,4 +1,9 @@
-import { mutation, query, internalMutation } from "./_generated/server";
+import {
+  mutation,
+  query,
+  internalMutation,
+  internalQuery,
+} from "./_generated/server";
 import { internal } from "./_generated/api";
 import { ConvexError, v } from "convex/values";
 export const save = mutation({
@@ -50,12 +55,16 @@ export const updatePreview = internalMutation({
     title: v.optional(v.string()),
     thumbnail: v.optional(v.string()),
     status: v.union(v.literal("ready"), v.literal("failed")),
+    description: v.optional(v.string()),
+    pageText: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     await ctx.db.patch(args.bookmarkId, {
       title: args.title,
       thumbnail: args.thumbnail,
       status: args.status,
+      description: args.description,
+      pageText: args.pageText,
     });
   },
 });
@@ -77,5 +86,45 @@ export const setNote = mutation({
       throw new ConvexError("Keep notes under 500 characters");
     }
     await ctx.db.patch(args.bookmarkId, { userNote: note || undefined });
+    if (note) {
+      await ctx.scheduler.runAfter(0, internal.enrich.enrich, {
+        bookmarkId: args.bookmarkId,
+      });
+    }
+  },
+});
+
+export const getForEnrich = internalQuery({
+  args: { bookmarkId: v.id("bookmarks") },
+  handler: async (ctx, args) => {
+    const bookmark = await ctx.db.get(args.bookmarkId);
+    if (!bookmark) return null;
+
+    const recent = await ctx.db
+      .query("bookmarks")
+      .withIndex("by_user", (q) => q.eq("userId", bookmark.userId))
+      .order("desc")
+      .take(200);
+
+    const existingTags = [
+      ...new Set(recent.flatMap((b) => b.aiTags ?? [])),
+    ].slice(0, 100);
+    return { bookmark, existingTags };
+  },
+});
+
+export const saveEnrichment = internalMutation({
+  args: {
+    bookmarkId: v.id("bookmarks"),
+    summary: v.string(),
+    aiTags: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const bookmark = await ctx.db.get(args.bookmarkId);
+    if (!bookmark) return;
+    await ctx.db.patch(args.bookmarkId, {
+      summary: args.summary,
+      aiTags: args.aiTags,
+    });
   },
 });

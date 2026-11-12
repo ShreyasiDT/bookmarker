@@ -61,11 +61,11 @@ function BookmarkCard({ b }: { b: Doc<"bookmarks"> }) {
           className="w-24 h-16 object-cover rounded flex-shrink-0"
         />
       ) : (
-        <div>
+        <div className="w-24 h-16 rounded shrink-0 bg-neutral-800 flex items-center justify-center">
           <img
             src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(getDomain(b.url))}&sz=64`}
             alt=""
-            className="w-24 h-16 rounded shrink-0 bg-neutral-800 flex items-center justify-center"
+            className="w-8 h-8 object-contain"
           />
         </div>
       )}
@@ -80,16 +80,18 @@ function BookmarkCard({ b }: { b: Doc<"bookmarks"> }) {
         </a>
         <p className="text-sm opacity-60">{getDomain(b.url)}</p>
         {b.status === "failed" && !editing && (
-          <div className="mt-1 inline-flex items-center gap-2 rounded bg-amber-500/10 px-1.5 py-0.5 text-xs text-amber-400">
-            <span aria-hidden="true">⚠</span>
-            <span>Saved — couldn&apos;t load a preview</span>
+          <p className="mt-1 rounded bg-amber-500/10 px-2 py-1 text-xs text-amber-400">
+            <span aria-hidden="true">⚠ </span>
+            {b.userNote
+              ? "Saved — couldn't load a preview. "
+              : "Saved — couldn't read this page. "}
             <button
               onClick={startEditing}
               className="underline hover:no-underline"
             >
-              {b.userNote ? "Edit note" : "Add a note"}
+              {b.userNote ? "Edit note" : "Add a note so you can find it later"}
             </button>
-          </div>
+          </p>
         )}
         {editing && (
           <div className="mt-2">

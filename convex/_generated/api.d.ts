@@ -9,6 +9,7 @@
  */
 
 import type * as bookmarks from "../bookmarks.js";
+import type * as enrich from "../enrich.js";
 import type * as hello from "../hello.js";
 import type * as preview from "../preview.js";
 
@@ -20,6 +21,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   bookmarks: typeof bookmarks;
+  enrich: typeof enrich;
   hello: typeof hello;
   preview: typeof preview;
 }>;
