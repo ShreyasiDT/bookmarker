@@ -1,10 +1,14 @@
-import { internalAction, internalMutation } from "./_generated/server";
+import {
+  internalAction,
+  internalMutation,
+  type ActionCtx,
+} from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 
 const MODEL = "gemini-3.5-flash-lite";
-
+const MAX_ATTEMPTS = 6;
 function buildPrompt(b: Doc<"bookmarks">, existingTags: string[]) {
   const about = [`URL: ${b.url}`];
   if (b.title) about.push(`Title: ${b.title}`);
@@ -95,16 +99,8 @@ export const enrich = internalAction({
 
       if (!res.ok) {
         console.log("Gemini request failed:", res.status, await res.text());
-        const attempt = args.attempt ?? 0;
-        if (res.status === 429 && attempt < 3) {
-          await ctx.scheduler.runAfter(
-            60_000 * (attempt + 1),
-            internal.enrich.enrich,
-            {
-              bookmarkId: args.bookmarkId,
-              attempt: attempt + 1,
-            },
-          );
+        if (res.status === 429 || res.status >= 500) {
+          await retryLater(ctx, args.bookmarkId, args.attempt ?? 0);
         }
         return;
       }
@@ -140,6 +136,7 @@ export const enrich = internalAction({
       });
     } catch (err) {
       console.log("Enrich crashed:", args.bookmarkId, err);
+      await retryLater(ctx, args.bookmarkId, args.attempt ?? 0);
     }
   },
 });
@@ -163,3 +160,20 @@ export const backfill = internalMutation({
     return targets.length;
   },
 });
+async function retryLater(
+  ctx: ActionCtx,
+  bookmarkId: Id<"bookmarks">,
+  attempt: number,
+) {
+  if (attempt >= MAX_ATTEMPTS) {
+    console.log(
+      "Enrich gave up for now — the daily job will retry:",
+      bookmarkId,
+    );
+    return;
+  }
+  await ctx.scheduler.runAfter(60_000 * 2 ** attempt, internal.enrich.enrich, {
+    bookmarkId,
+    attempt: attempt + 1,
+  });
+}
