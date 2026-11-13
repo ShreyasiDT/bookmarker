@@ -12,6 +12,17 @@ import type { HybridResult } from "@/convex/hybrid";
 import { ConvexError } from "convex/values";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { SignInButton, UserButton } from "@clerk/nextjs";
+const GRID = "grid gap-5 sm:grid-cols-2 lg:grid-cols-3";
+
+function formatDate(ms: number) {
+  const d = new Date(ms);
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    ...(sameYear ? {} : { year: "numeric" }),
+  });
+}
 function getDomain(url: string) {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
@@ -34,6 +45,12 @@ function BookmarkCard({ b }: { b: Doc<"bookmarks"> }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [noteError, setNoteError] = useState<string | null>(null);
+  const [imgFailed, setImgFailed] = useState(false);
+
+  const domain = getDomain(b.url);
+  const heading = b.title ?? b.userNote ?? getFallbackTitle(b.url);
+  const tags = b.aiTags ?? [];
+  const showThumbnail = b.thumbnail && !imgFailed;
 
   function startEditing() {
     setDraft(b.userNote ?? "");
@@ -42,75 +59,91 @@ function BookmarkCard({ b }: { b: Doc<"bookmarks"> }) {
   }
 
   async function saveNote() {
-    setNoteError(null);
     try {
       await setNote({ bookmarkId: b._id, note: draft });
       setEditing(false);
     } catch (err) {
       setNoteError(
-        err instanceof ConvexError ? String(err.data) : "Something went wrong",
+        err instanceof ConvexError
+          ? String(err.data)
+          : "Couldn't save the note. Try again.",
       );
     }
   }
-  const heading = b.title ?? b.userNote ?? getFallbackTitle(b.url);
+
   return (
-    <div
-      className={`flex gap-3 border rounded p-3 ${b.status === "pending" ? "opacity-60" : ""}`}
+    <article
+      className={`flex flex-col overflow-hidden rounded-2xl border border-line bg-panel ${
+        b.status === "pending" ? "opacity-60" : ""
+      }`}
     >
-      {b.thumbnail ? (
-        <img
-          src={b.thumbnail}
-          alt=""
-          className="w-24 h-16 object-cover rounded flex-shrink-0"
-        />
-      ) : (
-        <div className="w-24 h-16 rounded shrink-0 bg-neutral-800 flex items-center justify-center">
+      <a
+        href={b.url}
+        target="_blank"
+        rel="noreferrer"
+        className="block aspect-video bg-ink"
+      >
+        {b.status === "pending" ? (
+          <div className="h-full w-full animate-pulse bg-line/40" />
+        ) : showThumbnail ? (
           <img
-            src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(getDomain(b.url))}&sz=64`}
+            src={b.thumbnail}
             alt=""
-            className="w-8 h-8 object-contain"
+            onError={() => setImgFailed(true)}
+            className="h-full w-full object-cover"
           />
-        </div>
-      )}
-      <div className="min-w-0 flex-1">
+        ) : (
+          <div className="grid h-full w-full place-items-center">
+            <img
+              src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`}
+              alt=""
+              className="h-10 w-10 object-contain"
+            />
+          </div>
+        )}
+      </a>
+
+      <div className="flex flex-1 flex-col p-4">
         <a
           href={b.url}
           target="_blank"
-          rel="noopener noreferrer"
-          className="font-medium line-clamp-2 hover:underline"
+          rel="noreferrer"
+          className="font-serif text-lg leading-snug line-clamp-2 hover:underline"
         >
           {heading}
         </a>
-        <p className="text-sm opacity-60">{getDomain(b.url)}</p>
+
         {b.summary && (
-          <p className="mt-1 text-sm opacity-80 line-clamp-2">{b.summary}</p>
+          <p className="mt-1.5 text-sm text-muted line-clamp-2">{b.summary}</p>
         )}
-        {b.aiTags && b.aiTags.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1">
-            {b.aiTags.slice(0, 5).map((tag) => (
+
+        {tags.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {tags.slice(0, 4).map((tag) => (
               <span
                 key={tag}
-                className="rounded bg-neutral-800 px-1.5 py-0.5 text-xs opacity-80"
+                className="rounded-full border border-line px-2.5 py-0.5 text-xs text-muted"
               >
                 {tag}
               </span>
             ))}
-            {b.aiTags.length > 5 && (
-              <span className="px-1 py-0.5 text-xs opacity-60">
-                +{b.aiTags.length - 5}
+            {tags.length > 4 && (
+              <span className="px-1 py-0.5 text-xs text-muted">
+                +{tags.length - 4}
               </span>
             )}
           </div>
         )}
+
         {b.status === "ready" && !b.summary && (
-          <p className="mt-1 text-xs opacity-50">Adding tags…</p>
+          <p className="mt-3 text-xs text-muted">Adding tags…</p>
         )}
+
         {b.status === "failed" && !editing && (
-          <p className="mt-1 rounded bg-amber-500/10 px-2 py-1 text-xs text-amber-400">
-            <span aria-hidden="true">⚠ </span>
+          <p className="mt-3 rounded-lg bg-warn/10 px-3 py-2 text-xs text-warn">
             {b.userNote
-              ? "Saved — couldn't load a preview. "
-              : "Saved — couldn't read this page. "}
+              ? "Saved, but couldn't load a preview. "
+              : "Saved, but couldn't read this page. "}
             <button
               onClick={startEditing}
               className="underline hover:no-underline"
@@ -119,41 +152,42 @@ function BookmarkCard({ b }: { b: Doc<"bookmarks"> }) {
             </button>
           </p>
         )}
+
         {editing && (
-          <div className="mt-2">
+          <div className="mt-3">
             <textarea
               value={draft}
-              onChange={(e) => {
-                setDraft(e.target.value);
-                setNoteError(null);
-              }}
-              rows={2}
+              onChange={(e) => setDraft(e.target.value)}
               maxLength={500}
+              rows={3}
               autoFocus
               placeholder="What is this link? How will you remember it?"
-              className="w-full rounded border bg-transparent px-2 py-1 text-sm"
+              className="w-full rounded-lg border border-line bg-ink px-3 py-2 text-sm placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent"
             />
-            {noteError && (
-              <p className="mt-1 text-xs text-red-400">{noteError}</p>
-            )}
-            <div className="mt-1 flex gap-2">
+            <div className="mt-2 flex gap-2">
               <button
                 onClick={saveNote}
-                className="rounded border px-2 py-0.5 text-xs"
+                className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-ink"
               >
                 Save note
               </button>
               <button
                 onClick={() => setEditing(false)}
-                className="px-2 py-0.5 text-xs opacity-60 hover:opacity-100"
+                className="rounded-lg px-3 py-1.5 text-xs text-muted hover:text-fg"
               >
                 Cancel
               </button>
             </div>
+            {noteError && <p className="mt-2 text-xs text-warn">{noteError}</p>}
           </div>
         )}
+
+        <div className="mt-auto flex items-center justify-between gap-3 pt-4 text-xs text-muted">
+          <span className="truncate">{domain}</span>
+          <span className="shrink-0">{formatDate(b.savedAt)}</span>
+        </div>
       </div>
-    </div>
+    </article>
   );
 }
 function useDebounced(value: string, delay: number) {
@@ -216,18 +250,18 @@ function SearchResults({ query }: { query: string }) {
 
   return (
     <div className={loading ? "opacity-60" : ""}>
-      <div className="space-y-2">
-        {main.map((b) => (
-          <BookmarkCard key={b._id} b={b} />
-        ))}
-      </div>
+      {main.length > 0 && (
+        <div className={GRID}>
+          {main.map((b) => (
+            <BookmarkCard key={b._id} b={b} />
+          ))}
+        </div>
+      )}
 
       {extra.length > 0 && (
         <>
-          <p className="pt-4 pb-2 text-xs uppercase tracking-wide opacity-60">
-            Also mentioned in
-          </p>
-          <div className="space-y-2">
+          <h2 className="pt-8 pb-3 text-sm text-muted">Also mentioned in</h2>
+          <div className={GRID}>
             {extra.map((b) => (
               <BookmarkCard key={b._id} b={b} />
             ))}
@@ -237,10 +271,8 @@ function SearchResults({ query }: { query: string }) {
 
       {maybe.length > 0 && (
         <>
-          <p className="pt-4 pb-2 text-xs uppercase tracking-wide opacity-60">
-            Might be related
-          </p>
-          <div className="space-y-2">
+          <h2 className="pt-8 pb-3 text-sm text-muted">Might be related</h2>
+          <div className={GRID}>
             {maybe.map((b) => (
               <BookmarkCard key={b._id} b={b} />
             ))}
@@ -328,7 +360,7 @@ export default function Home() {
           </div>
           {error && <p className="mt-2 text-sm text-warn">{error}</p>}
 
-          <div className="mt-6 space-y-2">
+          <div className="mt-6">
             {query ? (
               <SearchResults query={query} />
             ) : (
@@ -336,9 +368,11 @@ export default function Home() {
                 {bookmarks === undefined && (
                   <p className="text-sm text-muted">Loading…</p>
                 )}
-                {bookmarks?.map((b) => (
-                  <BookmarkCard key={b._id} b={b} />
-                ))}
+                <div className={GRID}>
+                  {bookmarks?.map((b) => (
+                    <BookmarkCard key={b._id} b={b} />
+                  ))}
+                </div>
               </>
             )}
           </div>
