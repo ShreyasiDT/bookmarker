@@ -56,3 +56,9 @@
 - personal memory:
 - from a note:
 - typo:
+  | Version | Top 3 | Lower | Not found | Of |
+  |---|---|---|---|---|
+  | Keyword: baseline | 29 | 2 | 8 | 39 |
+  | Keyword: stop words | 30 | 1 | 8 | 39 |
+  | Keyword: description moved | 31 | 0 | 8 | 39 |
+  | **Meaning search** | | | | 39 |

@@ -134,6 +134,9 @@ export const enrich = internalAction({
         summary,
         aiTags,
       });
+      await ctx.scheduler.runAfter(0, internal.embed.embedBookmark, {
+        bookmarkId: args.bookmarkId,
+      });
     } catch (err) {
       console.log("Enrich crashed:", args.bookmarkId, err);
       await retryLater(ctx, args.bookmarkId, args.attempt ?? 0);
@@ -144,19 +147,19 @@ export const enrich = internalAction({
 export const backfill = internalMutation({
   args: { all: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
-    const every = await ctx.db.query("bookmarks").collect();
+    const bookmarks = await ctx.db.query("bookmarks").collect();
+    const embedded = await ctx.db.query("embeddings").collect();
+    const hasVector = new Set(embedded.map((e) => e.bookmarkId));
     const targets = args.all
-      ? every
-      : every.filter((b) => b.summary === undefined);
-
+      ? bookmarks
+      : bookmarks.filter((b) => !hasVector.has(b._id));
     let delay = 0;
     for (const b of targets) {
-      await ctx.scheduler.runAfter(delay, internal.enrich.enrich, {
+      await ctx.scheduler.runAfter(delay, internal.embed.embedBookmark, {
         bookmarkId: b._id,
       });
-      delay += 5000;
+      delay += 2000;
     }
-
     return targets.length;
   },
 });

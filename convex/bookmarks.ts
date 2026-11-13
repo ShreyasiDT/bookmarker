@@ -10,6 +10,7 @@ import { internal } from "./_generated/api";
 import { ConvexError, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { SEARCH_TESTS } from "./searchTests";
+
 const STOP_WORDS = new Set([
   "a",
   "an",
@@ -127,6 +128,10 @@ export const setNote = mutation({
     await refreshSearchText(ctx, args.bookmarkId);
     if (note) {
       await ctx.scheduler.runAfter(0, internal.enrich.enrich, {
+        bookmarkId: args.bookmarkId,
+      });
+    } else {
+      await ctx.scheduler.runAfter(0, internal.embed.embedBookmark, {
         bookmarkId: args.bookmarkId,
       });
     }
@@ -334,9 +339,24 @@ export const runSearchTests = internalQuery({
     };
   },
 });
-function matchesExpect(b: Doc<"bookmarks">, expect: string) {
+export function matchesExpect(b: Doc<"bookmarks">, expect: string) {
   const e = expect.toLowerCase();
   return [b.url, b.title, b.summary].some((field) =>
     field?.toLowerCase().includes(e),
   );
 }
+export const getBookmark = internalQuery({
+  args: { bookmarkId: v.id("bookmarks") },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.bookmarkId);
+  },
+});
+export const allForUser = internalQuery({
+  args: { userId: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("bookmarks")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+  },
+});
