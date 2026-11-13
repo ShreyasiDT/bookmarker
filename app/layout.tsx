@@ -1,5 +1,6 @@
 import ConvexClientProvider from "./ConvexClientProvider";
 import type { Metadata } from "next";
+
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import {
@@ -10,7 +11,13 @@ import {
   UserButton,
 } from "@clerk/nextjs";
 import { Suspense } from "react";
+import { Instrument_Sans, Newsreader } from "next/font/google";
 
+const sans = Instrument_Sans({
+  subsets: ["latin"],
+  variable: "--font-instrument",
+});
+const serif = Newsreader({ subsets: ["latin"], variable: "--font-newsreader" });
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -32,11 +39,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">
+    <html lang="en" className={`${sans.variable} ${serif.variable}`}>
+      <body className="font-sans antialiased">
         <ClerkProvider>
           <header className="flex justify-end items-center p-4 gap-4 h-16">
             <Suspense>

@@ -11,6 +11,7 @@ import {
 import type { HybridResult } from "@/convex/hybrid";
 import { ConvexError } from "convex/values";
 import type { Doc } from "@/convex/_generated/dataModel";
+import { SignInButton, UserButton } from "@clerk/nextjs";
 function getDomain(url: string) {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
@@ -275,49 +276,74 @@ export default function Home() {
   }
 
   return (
-    <main className="p-8 w-full max-w-xl mx-auto">
+    <>
       <Unauthenticated>
-        <p>Sign in to save bookmarks.</p>
+        <main className="grid min-h-screen place-items-center px-6">
+          <div className="max-w-sm text-center">
+            <h1 className="font-serif text-4xl">Bookmarker</h1>
+            <p className="mt-3 text-muted">
+              Save links. Find them later by whatever you remember about them.
+            </p>
+            <SignInButton mode="modal">
+              <button className="mt-8 rounded-full bg-accent px-6 py-2.5 font-medium text-ink">
+                Sign in
+              </button>
+            </SignInButton>
+          </div>
+        </main>
       </Unauthenticated>
+
       <Authenticated>
-        <div className="flex gap-2">
-          <input
-            value={url}
-            onChange={(e) => {
-              setUrl(e.target.value);
-              setError(null);
-            }}
-            placeholder="Paste the url you need to save today!"
-            className="flex-1 border rounded px-3 py-2"
-          />
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="border rounded px-4 py-2 disabled:opacity-50"
-          >
-            {saving ? "Saving..." : "Save"}
-          </button>
-        </div>
-        {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
-        <input
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-          placeholder="Search your bookmarks"
-          className="mt-6 w-full rounded border px-3 py-2"
-        />
-        <div className="mt-6 space-y-2">
-          {query ? (
-            <SearchResults query={query} />
-          ) : (
-            <>
-              {bookmarks === undefined && <p>Loading...</p>}
-              {bookmarks?.map((b) => (
-                <BookmarkCard key={b._id} b={b} />
-              ))}
-            </>
-          )}
-        </div>
+        <header className="sticky top-0 z-10 border-b border-line bg-ink/90 backdrop-blur">
+          <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3">
+            <span className="font-serif text-xl">Bookmarker</span>
+            <input
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search your bookmarks"
+              className="min-w-0 flex-1 rounded-full border border-line bg-panel px-4 py-2 text-sm placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent"
+            />
+            <UserButton />
+          </div>
+        </header>
+
+        <main className="mx-auto max-w-6xl px-4 py-6">
+          <div className="flex gap-2">
+            <input
+              value={url}
+              onChange={(e) => {
+                setUrl(e.target.value);
+                setError(null);
+              }}
+              placeholder="Paste a link to save"
+              className="min-w-0 flex-1 rounded-lg border border-line bg-panel px-3 py-2 text-sm placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent"
+            />
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-ink disabled:opacity-50"
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+          </div>
+          {error && <p className="mt-2 text-sm text-warn">{error}</p>}
+
+          <div className="mt-6 space-y-2">
+            {query ? (
+              <SearchResults query={query} />
+            ) : (
+              <>
+                {bookmarks === undefined && (
+                  <p className="text-sm text-muted">Loading…</p>
+                )}
+                {bookmarks?.map((b) => (
+                  <BookmarkCard key={b._id} b={b} />
+                ))}
+              </>
+            )}
+          </div>
+        </main>
       </Authenticated>
-    </main>
+    </>
   );
 }
