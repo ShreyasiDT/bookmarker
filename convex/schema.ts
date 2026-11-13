@@ -30,4 +30,15 @@ export default defineSchema({
       searchField: "extraText",
       filterFields: ["userId"],
     }),
+  embeddings: defineTable({
+    bookmarkId: v.id("bookmarks"),
+    userId: v.string(),
+    vector: v.array(v.float64()),
+  })
+    .index("by_bookmark", ["bookmarkId"])
+    .vectorIndex("by_vector", {
+      vectorField: "vector",
+      dimensions: 768,
+      filterFields: ["userId"],
+    }),
 });
