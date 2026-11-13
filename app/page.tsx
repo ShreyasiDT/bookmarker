@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   Authenticated,
   Unauthenticated,
@@ -12,8 +12,11 @@ import { ConvexError } from "convex/values";
 import { SignInButton, UserButton, useUser } from "@clerk/nextjs";
 import {
   Library,
+  MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
+  Pencil,
+  Trash2,
   type LucideIcon,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
@@ -137,23 +140,129 @@ function useDebounced(value: string, delay: number) {
   return debounced;
 }
 
+// ─── The ⋯ menu ────────────────────────────────────────────
+
+const MENU_ITEM =
+  "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-line/50";
+
+function CardMenu({
+  hasNote,
+  onEditNote,
+  onDelete,
+}: {
+  hasNote: boolean;
+  onEditNote: () => void;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function onPointerDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        setConfirming(false);
+      }
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setOpen(false);
+        setConfirming(false);
+      }
+    }
+
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => {
+          setOpen(!open);
+          setConfirming(false);
+        }}
+        aria-label="More actions"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="rounded-md p-1 text-muted hover:bg-line/50 hover:text-fg"
+      >
+        <MoreHorizontal className="h-4 w-4" />
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 bottom-full z-20 mb-1 w-44 rounded-xl border border-line bg-panel p-1 shadow-lg"
+        >
+          <button
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              onEditNote();
+            }}
+            className={`${MENU_ITEM} text-fg`}
+          >
+            <Pencil className="h-4 w-4" />
+            {hasNote ? "Edit note" : "Add a note"}
+          </button>
+
+          {confirming ? (
+            <button
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                setConfirming(false);
+                onDelete();
+              }}
+              className={`${MENU_ITEM} font-medium text-danger`}
+            >
+              <Trash2 className="h-4 w-4" />
+              Yes, delete
+            </button>
+          ) : (
+            <button
+              role="menuitem"
+              onClick={() => setConfirming(true)}
+              className={`${MENU_ITEM} text-danger`}
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Bookmark card ─────────────────────────────────────────
 
 function BookmarkCard({ b }: { b: Doc<"bookmarks"> }) {
   const setNote = useMutation(api.bookmarks.setNote);
+  const removeBookmark = useMutation(api.bookmarks.remove);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
-  const [noteError, setNoteError] = useState<string | null>(null);
+  const [cardError, setCardError] = useState<string | null>(null);
   const [imgFailed, setImgFailed] = useState(false);
+  const [deleted, setDeleted] = useState(false);
 
   const domain = getDomain(b.url);
   const heading = b.title ?? b.userNote ?? getFallbackTitle(b.url);
   const tags = b.aiTags ?? [];
   const showThumbnail = b.thumbnail && !imgFailed;
+  const showNote = b.userNote && b.title && !editing;
 
   function startEditing() {
     setDraft(b.userNote ?? "");
-    setNoteError(null);
+    setCardError(null);
     setEditing(true);
   }
 
@@ -162,7 +271,7 @@ function BookmarkCard({ b }: { b: Doc<"bookmarks"> }) {
       await setNote({ bookmarkId: b._id, note: draft });
       setEditing(false);
     } catch (err) {
-      setNoteError(
+      setCardError(
         err instanceof ConvexError
           ? String(err.data)
           : "Couldn't save the note. Try again.",
@@ -170,9 +279,20 @@ function BookmarkCard({ b }: { b: Doc<"bookmarks"> }) {
     }
   }
 
+  async function deleteBookmark() {
+    try {
+      await removeBookmark({ bookmarkId: b._id });
+      setDeleted(true);
+    } catch {
+      setCardError("Couldn't delete this bookmark. Try again.");
+    }
+  }
+
+  if (deleted) return null;
+
   return (
     <article
-      className={`flex flex-col overflow-hidden rounded-2xl border border-line bg-panel ${
+      className={`flex flex-col rounded-2xl border border-line bg-panel ${
         b.status === "pending" ? "opacity-60" : ""
       }`}
     >
@@ -180,7 +300,7 @@ function BookmarkCard({ b }: { b: Doc<"bookmarks"> }) {
         href={b.url}
         target="_blank"
         rel="noreferrer"
-        className="block aspect-video overflow-hidden bg-ink"
+        className="block aspect-video overflow-hidden rounded-t-2xl bg-ink"
       >
         {b.status === "pending" ? (
           <div className="h-full w-full animate-pulse bg-line/40" />
@@ -214,6 +334,13 @@ function BookmarkCard({ b }: { b: Doc<"bookmarks"> }) {
 
         {b.summary && (
           <p className="mt-1.5 text-sm text-muted line-clamp-2">{b.summary}</p>
+        )}
+
+        {showNote && (
+          <p className="mt-2 text-sm text-fg/80 line-clamp-2">
+            <span className="text-muted">Note: </span>
+            {b.userNote}
+          </p>
         )}
 
         {tags.length > 0 && (
@@ -277,13 +404,19 @@ function BookmarkCard({ b }: { b: Doc<"bookmarks"> }) {
                 Cancel
               </button>
             </div>
-            {noteError && <p className="mt-2 text-xs text-warn">{noteError}</p>}
           </div>
         )}
 
-        <div className="mt-auto flex items-center justify-between gap-3 pt-4 text-xs text-muted">
-          <span className="truncate">{domain}</span>
+        {cardError && <p className="mt-2 text-xs text-danger">{cardError}</p>}
+
+        <div className="mt-auto flex items-center gap-3 pt-4 text-xs text-muted">
+          <span className="min-w-0 flex-1 truncate">{domain}</span>
           <span className="shrink-0">{formatDate(b.savedAt)}</span>
+          <CardMenu
+            hasNote={!!b.userNote}
+            onEditNote={startEditing}
+            onDelete={deleteBookmark}
+          />
         </div>
       </div>
     </article>

@@ -86,7 +86,6 @@ export const list = query({
       .collect();
   },
 });
-
 export const updatePreview = internalMutation({
   args: {
     bookmarkId: v.id("bookmarks"),
@@ -97,6 +96,9 @@ export const updatePreview = internalMutation({
     pageText: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const bookmark = await ctx.db.get(args.bookmarkId);
+    if (!bookmark) return;
+
     await ctx.db.patch(args.bookmarkId, {
       title: args.title,
       thumbnail: args.thumbnail,
@@ -364,5 +366,27 @@ export const keywordSearchFor = internalQuery({
   args: { userId: v.string(), text: v.string() },
   handler: async (ctx, args) => {
     return await searchBookmarks(ctx, args.userId, args.text);
+  },
+});
+export const remove = mutation({
+  args: { bookmarkId: v.id("bookmarks") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not signed in");
+
+    const bookmark = await ctx.db.get(args.bookmarkId);
+    if (!bookmark || bookmark.userId !== identity.subject) {
+      throw new Error("Bookmark not found");
+    }
+
+    const embeddings = await ctx.db
+      .query("embeddings")
+      .withIndex("by_bookmark", (q) => q.eq("bookmarkId", args.bookmarkId))
+      .collect();
+    for (const e of embeddings) {
+      await ctx.db.delete(e._id);
+    }
+
+    await ctx.db.delete(args.bookmarkId);
   },
 });
