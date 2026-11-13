@@ -18,5 +18,15 @@ export default defineSchema({
     summary: v.optional(v.string()),
     aiTags: v.optional(v.array(v.string())),
     userNote: v.optional(v.string()),
-  }).index("by_user", ["userId", "savedAt"]),
+    searchText: v.optional(v.string()),
+  })
+    .index("by_user", ["userId", "savedAt"])
+    .searchIndex("search_main", {
+      searchField: "searchText",
+      filterFields: ["userId"],
+    })
+    .searchIndex("search_page", {
+      searchField: "pageText",
+      filterFields: ["userId"],
+    }),
 });

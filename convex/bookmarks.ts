@@ -3,9 +3,11 @@ import {
   query,
   internalMutation,
   internalQuery,
+  type MutationCtx,
 } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { ConvexError, v } from "convex/values";
+import type { Doc, Id } from "./_generated/dataModel";
 export const save = mutation({
   args: {
     url: v.string(),
@@ -29,6 +31,8 @@ export const save = mutation({
       userId: identity.subject,
       status: "pending",
     });
+    await refreshSearchText(ctx, bookmarkId);
+
     await ctx.scheduler.runAfter(0, internal.preview.fetchPreview, {
       bookmarkId,
       url,
@@ -66,6 +70,7 @@ export const updatePreview = internalMutation({
       description: args.description,
       pageText: args.pageText,
     });
+    await refreshSearchText(ctx, args.bookmarkId);
   },
 });
 
@@ -86,6 +91,7 @@ export const setNote = mutation({
       throw new ConvexError("Keep notes under 500 characters");
     }
     await ctx.db.patch(args.bookmarkId, { userNote: note || undefined });
+    await refreshSearchText(ctx, args.bookmarkId);
     if (note) {
       await ctx.scheduler.runAfter(0, internal.enrich.enrich, {
         bookmarkId: args.bookmarkId,
@@ -130,5 +136,78 @@ export const saveEnrichment = internalMutation({
       summary: args.summary,
       aiTags: args.aiTags,
     });
+    await refreshSearchText(ctx, args.bookmarkId);
+  },
+});
+function buildSearchText(b: Doc<"bookmarks">) {
+  let urlWords = "";
+  try {
+    const u = new URL(b.url);
+    urlWords = (u.hostname + u.pathname).replace(/[^a-z0-9]+/gi, " ");
+  } catch {}
+  return [
+    b.title,
+    b.description,
+    b.summary,
+    b.aiTags?.join(" "),
+    b.userNote,
+    urlWords,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .normalize("NFKC")
+    .toLowerCase();
+}
+async function refreshSearchText(ctx: MutationCtx, id: Id<"bookmarks">) {
+  const b = await ctx.db.get(id);
+  if (!b) return;
+  await ctx.db.patch(id, { searchText: buildSearchText(b) });
+}
+
+export const search = query({
+  args: {
+    text: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const empty = { main: [], extra: [] };
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return empty;
+
+    const text = args.text
+      .normalize("NFKC")
+      .trim()
+      .split(/\s+/)
+      .slice(0, 16)
+      .join(" ");
+    if (!text) return empty;
+
+    const main = await ctx.db
+      .query("bookmarks")
+      .withSearchIndex("search_main", (q) =>
+        q.search("searchText", text).eq("userId", identity.subject),
+      )
+      .take(20);
+
+    const fromPages = await ctx.db
+      .query("bookmarks")
+      .withSearchIndex("search_page", (q) =>
+        q.search("pageText", text).eq("userId", identity.subject),
+      )
+      .take(20);
+
+    const shown = new Set(main.map((b) => b._id));
+    const extra = fromPages.filter((b) => !shown.has(b._id));
+    return { main, extra };
+  },
+});
+
+export const backfillSearchText = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const all = await ctx.db.query("bookmarks").collect();
+    for (const b of all) {
+      await ctx.db.patch(b._id, { searchText: buildSearchText(b) });
+    }
+    return all.length;
   },
 });
