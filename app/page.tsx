@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { api } from "@/convex/_generated/api";
 import {
   Authenticated,
@@ -153,6 +153,42 @@ function BookmarkCard({ b }: { b: Doc<"bookmarks"> }) {
     </div>
   );
 }
+function useDebounced(value: string, delay: number) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(id);
+  }, [value, delay]);
+  return debounced;
+}
+function SearchResults({ query }: { query: string }) {
+  const results = useQuery(api.bookmarks.search, { text: query });
+
+  if (results === undefined) {
+    return <p className="text-sm opacity-60">Searching...</p>;
+  }
+  const { main, extra } = results;
+  if (main.length === 0 && extra.length === 0) {
+    return <p>{`Nothing found for "${query}".`}</p>;
+  }
+  return (
+    <>
+      {main.map((b) => (
+        <BookmarkCard key={b._id} b={b} />
+      ))}
+      {extra.length > 0 && (
+        <>
+          <p className="pt-4 text-xs uppercase tracking-wide opacity-60">
+            Also mentioned in
+          </p>
+          {extra.map((b) => (
+            <BookmarkCard key={b._id} b={b} />
+          ))}
+        </>
+      )}
+    </>
+  );
+}
 
 export default function Home() {
   const [url, setUrl] = useState("");
@@ -160,7 +196,8 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const bookmarks = useQuery(api.bookmarks.list);
   const save = useMutation(api.bookmarks.save);
-
+  const [searchInput, setSearchInput] = useState("");
+  const query = useDebounced(searchInput.trim(), 300);
   async function handleSave() {
     if (!url.trim() || saving) return;
     setSaving(true);
@@ -202,11 +239,23 @@ export default function Home() {
           </button>
         </div>
         {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
+        <input
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          placeholder="Search your bookmarks"
+          className="mt-6 w-full rounded border px-3 py-2"
+        />
         <div className="mt-6 space-y-2">
-          {bookmarks === undefined && <p>Loading...</p>}
-          {bookmarks?.map((b) => (
-            <BookmarkCard key={b._id} b={b} />
-          ))}
+          {query ? (
+            <SearchResults query={query} />
+          ) : (
+            <>
+              {bookmarks === undefined && <p>Loading...</p>}
+              {bookmarks?.map((b) => (
+                <BookmarkCard key={b._id} b={b} />
+              ))}
+            </>
+          )}
         </div>
       </Authenticated>
     </main>
