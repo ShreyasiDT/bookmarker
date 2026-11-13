@@ -13,6 +13,7 @@ import type * as crons from "../crons.js";
 import type * as enrich from "../enrich.js";
 import type * as hello from "../hello.js";
 import type * as preview from "../preview.js";
+import type * as searchTests from "../searchTests.js";
 
 import type {
   ApiFromModules,
@@ -26,6 +27,7 @@ declare const fullApi: ApiFromModules<{
   enrich: typeof enrich;
   hello: typeof hello;
   preview: typeof preview;
+  searchTests: typeof searchTests;
 }>;
 
 /**

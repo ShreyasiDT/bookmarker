@@ -4,10 +4,43 @@ import {
   internalMutation,
   internalQuery,
   type MutationCtx,
+  type QueryCtx,
 } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { ConvexError, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
+import { SEARCH_TESTS } from "./searchTests";
+const STOP_WORDS = new Set([
+  "a",
+  "an",
+  "the",
+  "to",
+  "of",
+  "in",
+  "on",
+  "for",
+  "and",
+  "or",
+  "is",
+  "it",
+  "i",
+  "me",
+  "my",
+  "you",
+  "your",
+  "we",
+  "that",
+  "this",
+  "with",
+  "at",
+  "by",
+  "from",
+  "about",
+  "where",
+  "what",
+  "how",
+  "which",
+]);
 export const save = mutation({
   args: {
     url: v.string(),
@@ -145,23 +178,53 @@ function buildSearchText(b: Doc<"bookmarks">) {
     const u = new URL(b.url);
     urlWords = (u.hostname + u.pathname).replace(/[^a-z0-9]+/gi, " ");
   } catch {}
-  return [
-    b.title,
-    b.description,
-    b.summary,
-    b.aiTags?.join(" "),
-    b.userNote,
-    urlWords,
-  ]
+  return [b.title, b.summary, b.aiTags?.join(" "), b.userNote, urlWords]
     .filter(Boolean)
     .join(" ")
     .normalize("NFKC")
     .toLowerCase();
 }
+function buildExtraText(b: Doc<"bookmarks">) {
+  const text = [b.description, b.pageText]
+    .filter(Boolean)
+    .join(" ")
+    .normalize("NFKC")
+    .toLowerCase();
+  return text || undefined;
+}
+async function searchBookmarks(ctx: QueryCtx, userId: string, rawText: string) {
+  const words = rawText.normalize("NFKC").trim().split(/\s+/);
+  const meaningful = words.filter((w) => !STOP_WORDS.has(w.toLowerCase()));
+  const text = (meaningful.length ? meaningful : words).slice(0, 16).join(" ");
+  if (!text) {
+    return { main: [] as Doc<"bookmarks">[], extra: [] as Doc<"bookmarks">[] };
+  }
+
+  const main = await ctx.db
+    .query("bookmarks")
+    .withSearchIndex("search_main", (q) =>
+      q.search("searchText", text).eq("userId", userId),
+    )
+    .take(20);
+
+  const fromPages = await ctx.db
+    .query("bookmarks")
+    .withSearchIndex("search_extra", (q) =>
+      q.search("extraText", text).eq("userId", userId),
+    )
+    .take(20);
+
+  const shown = new Set(main.map((b) => b._id));
+  const extra = fromPages.filter((b) => !shown.has(b._id));
+  return { main, extra };
+}
 async function refreshSearchText(ctx: MutationCtx, id: Id<"bookmarks">) {
   const b = await ctx.db.get(id);
   if (!b) return;
-  await ctx.db.patch(id, { searchText: buildSearchText(b) });
+  await ctx.db.patch(id, {
+    searchText: buildSearchText(b),
+    extraText: buildExtraText(b),
+  });
 }
 
 export const search = query({
@@ -173,10 +236,9 @@ export const search = query({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return empty;
 
-    const text = args.text
-      .normalize("NFKC")
-      .trim()
-      .split(/\s+/)
+    const words = args.text.normalize("NFKC").trim().split(/\s+/);
+    const meaningful = words.filter((w) => !STOP_WORDS.has(w.toLowerCase()));
+    const text = (meaningful.length ? meaningful : words)
       .slice(0, 16)
       .join(" ");
     if (!text) return empty;
@@ -190,8 +252,8 @@ export const search = query({
 
     const fromPages = await ctx.db
       .query("bookmarks")
-      .withSearchIndex("search_page", (q) =>
-        q.search("pageText", text).eq("userId", identity.subject),
+      .withSearchIndex("search_extra", (q) =>
+        q.search("extraText", text).eq("userId", identity.subject),
       )
       .take(20);
 
@@ -206,8 +268,75 @@ export const backfillSearchText = internalMutation({
   handler: async (ctx) => {
     const all = await ctx.db.query("bookmarks").collect();
     for (const b of all) {
-      await ctx.db.patch(b._id, { searchText: buildSearchText(b) });
+      await ctx.db.patch(b._id, {
+        searchText: buildSearchText(b),
+        extraText: buildExtraText(b),
+      });
     }
     return all.length;
   },
 });
+export const runSearchTests = internalQuery({
+  args: { userId: v.string() },
+  handler: async (ctx, args) => {
+    const all = await ctx.db
+      .query("bookmarks")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    const rows = [];
+    for (const t of SEARCH_TESTS) {
+      const targets = all.filter((b) => matchesExpect(b, t.expect));
+      if (targets.length !== 1) {
+        rows.push({ ...t, result: `bad expect: matches ${targets.length}` });
+        continue;
+      }
+      const target = targets[0];
+
+      const { main, extra } = await searchBookmarks(ctx, args.userId, t.query);
+      const position = main.findIndex((b) => b._id === target._id);
+      const result =
+        position >= 0
+          ? position + 1
+          : extra.some((b) => b._id === target._id)
+            ? "extra"
+            : "not found";
+      rows.push({ ...t, result });
+    }
+
+    const scored = rows.filter(
+      (r) =>
+        typeof r.result === "number" ||
+        r.result === "extra" ||
+        r.result === "not found",
+    );
+    const top3 = scored.filter(
+      (r) => typeof r.result === "number" && r.result <= 3,
+    ).length;
+    const lower = scored.filter(
+      (r) =>
+        r.result === "extra" || (typeof r.result === "number" && r.result > 3),
+    ).length;
+    const notFound = scored.filter((r) => r.result === "not found").length;
+
+    return {
+      score: { top3, lower, notFound, of: scored.length },
+      badExpects: rows.filter(
+        (r) =>
+          typeof r.result === "string" && r.result.startsWith("bad expect"),
+      ),
+      misses: scored.filter(
+        (r) =>
+          r.result === "not found" ||
+          (typeof r.result === "number" && r.result > 3),
+      ),
+      rows,
+    };
+  },
+});
+function matchesExpect(b: Doc<"bookmarks">, expect: string) {
+  const e = expect.toLowerCase();
+  return [b.url, b.title, b.summary].some((field) =>
+    field?.toLowerCase().includes(e),
+  );
+}

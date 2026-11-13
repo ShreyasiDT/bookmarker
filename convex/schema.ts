@@ -13,6 +13,7 @@ export default defineSchema({
       v.literal("ready"),
       v.literal("failed"),
     ),
+    extraText: v.optional(v.string()),
     description: v.optional(v.string()),
     pageText: v.optional(v.string()),
     summary: v.optional(v.string()),
@@ -25,8 +26,8 @@ export default defineSchema({
       searchField: "searchText",
       filterFields: ["userId"],
     })
-    .searchIndex("search_page", {
-      searchField: "pageText",
+    .searchIndex("search_extra", {
+      searchField: "extraText",
       filterFields: ["userId"],
     }),
 });
