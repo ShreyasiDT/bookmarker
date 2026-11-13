@@ -10,6 +10,7 @@
 
 import type * as bookmarks from "../bookmarks.js";
 import type * as crons from "../crons.js";
+import type * as embed from "../embed.js";
 import type * as enrich from "../enrich.js";
 import type * as hello from "../hello.js";
 import type * as preview from "../preview.js";
@@ -24,6 +25,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   bookmarks: typeof bookmarks;
   crons: typeof crons;
+  embed: typeof embed;
   enrich: typeof enrich;
   hello: typeof hello;
   preview: typeof preview;
