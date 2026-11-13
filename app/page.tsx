@@ -6,7 +6,9 @@ import {
   Unauthenticated,
   useMutation,
   useQuery,
+  useAction,
 } from "convex/react";
+import type { HybridResult } from "@/convex/hybrid";
 import { ConvexError } from "convex/values";
 import type { Doc } from "@/convex/_generated/dataModel";
 function getDomain(url: string) {
@@ -162,31 +164,89 @@ function useDebounced(value: string, delay: number) {
   return debounced;
 }
 function SearchResults({ query }: { query: string }) {
-  const results = useQuery(api.bookmarks.search, { text: query });
+  const runSearch = useAction(api.hybrid.hybridSearch);
+  const [done, setDone] = useState<{
+    query: string;
+    results: HybridResult;
+  } | null>(null);
+  const [failedQuery, setFailedQuery] = useState<string | null>(null);
 
-  if (results === undefined) {
-    return <p className="text-sm opacity-60">Searching...</p>;
+  useEffect(() => {
+    let cancelled = false;
+
+    runSearch({ text: query })
+      .then((results) => {
+        if (!cancelled) setDone({ query, results });
+      })
+      .catch(() => {
+        if (!cancelled) setFailedQuery(query);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [query, runSearch]);
+
+  const loading = done?.query !== query;
+  const failed = failedQuery === query;
+
+  if (failed) {
+    return (
+      <p className="text-sm opacity-60">
+        Search failed. Try again in a moment.
+      </p>
+    );
   }
-  const { main, extra } = results;
-  if (main.length === 0 && extra.length === 0) {
-    return <p>{`Nothing found for "${query}".`}</p>;
+
+  if (done === null) {
+    return <p className="text-sm opacity-60">Searching…</p>;
   }
+
+  const { main, extra, maybe } = done.results;
+
+  if (
+    !loading &&
+    main.length === 0 &&
+    extra.length === 0 &&
+    maybe.length === 0
+  ) {
+    return <p className="text-sm opacity-60">Nothing found for “{query}”.</p>;
+  }
+
   return (
-    <>
-      {main.map((b) => (
-        <BookmarkCard key={b._id} b={b} />
-      ))}
+    <div className={loading ? "opacity-60" : ""}>
+      <div className="space-y-2">
+        {main.map((b) => (
+          <BookmarkCard key={b._id} b={b} />
+        ))}
+      </div>
+
       {extra.length > 0 && (
         <>
-          <p className="pt-4 text-xs uppercase tracking-wide opacity-60">
+          <p className="pt-4 pb-2 text-xs uppercase tracking-wide opacity-60">
             Also mentioned in
           </p>
-          {extra.map((b) => (
-            <BookmarkCard key={b._id} b={b} />
-          ))}
+          <div className="space-y-2">
+            {extra.map((b) => (
+              <BookmarkCard key={b._id} b={b} />
+            ))}
+          </div>
         </>
       )}
-    </>
+
+      {maybe.length > 0 && (
+        <>
+          <p className="pt-4 pb-2 text-xs uppercase tracking-wide opacity-60">
+            Might be related
+          </p>
+          <div className="space-y-2">
+            {maybe.map((b) => (
+              <BookmarkCard key={b._id} b={b} />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
