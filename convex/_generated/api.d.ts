@@ -13,6 +13,7 @@ import type * as crons from "../crons.js";
 import type * as embed from "../embed.js";
 import type * as enrich from "../enrich.js";
 import type * as hello from "../hello.js";
+import type * as hybrid from "../hybrid.js";
 import type * as preview from "../preview.js";
 import type * as searchTests from "../searchTests.js";
 
@@ -28,6 +29,7 @@ declare const fullApi: ApiFromModules<{
   embed: typeof embed;
   enrich: typeof enrich;
   hello: typeof hello;
+  hybrid: typeof hybrid;
   preview: typeof preview;
   searchTests: typeof searchTests;
 }>;

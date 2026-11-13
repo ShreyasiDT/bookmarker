@@ -246,3 +246,28 @@ export const runMeaningTests = internalAction({
     };
   },
 });
+export const NOISE_QUERIES = [
+  "batman",
+  "biryani recipe",
+  "cricket world cup",
+  "weather tomorrow",
+  "car insurance",
+];
+
+export const checkNoise = internalAction({
+  args: { userId: v.string() },
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{ query: string; scores: number[] }[]> => {
+    const out = [];
+    for (const query of NOISE_QUERIES) {
+      const hits = await meaningSearch(ctx, args.userId, query);
+      out.push({
+        query,
+        scores: hits.slice(0, 5).map((h) => Number(h.score.toFixed(3))),
+      });
+    }
+    return out;
+  },
+});

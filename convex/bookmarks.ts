@@ -360,3 +360,9 @@ export const allForUser = internalQuery({
       .collect();
   },
 });
+export const keywordSearchFor = internalQuery({
+  args: { userId: v.string(), text: v.string() },
+  handler: async (ctx, args) => {
+    return await searchBookmarks(ctx, args.userId, args.text);
+  },
+});
